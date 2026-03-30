@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RealQuest — Demo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { overflow: hidden; font-family: 'Segoe UI', sans-serif; background: #000; }
+
+  /* --- Loading Screen --- */
+  #loading-screen {
+    position: fixed; inset: 0; z-index: 1000;
+    background: linear-gradient(135deg, #0a0a2e, #1a0a3e);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    transition: opacity 0.8s;
+  }
+  #loading-screen.hidden { opacity: 0; pointer-events: none; }
+  #loading-screen h1 {
+    font-size: 64px; color: #fff;
+    text-shadow: 0 0 40px rgba(0,200,255,0.8), 0 0 80px rgba(0,200,255,0.4);
+    letter-spacing: 8px; margin-bottom: 10px;
+  }
+  #loading-screen p { color: rgba(255,255,255,0.5); font-size: 16px; letter-spacing: 4px; margin-bottom: 40px; }
+  .loader { width: 200px; height: 3px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; }
+  .loader-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #00c8ff, #a855f7); border-radius: 2px; transition: width 0.3s; }
+  #start-btn {
+    margin-top: 30px; padding: 14px 50px; font-size: 18px; letter-spacing: 3px;
+    background: transparent; border: 1px solid rgba(0,200,255,0.5); color: #00c8ff;
+    cursor: pointer; border-radius: 4px; display: none;
+    transition: all 0.3s;
+  }
+  #start-btn:hover { background: rgba(0,200,255,0.1); border-color: #00c8ff; box-shadow: 0 0 30px rgba(0,200,255,0.3); }
+
+  /* --- HUD --- */
+  #hud {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    padding: 20px 30px; display: none;
+    background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 100%);
+  }
+  #hud.visible { display: flex; justify-content: space-between; align-items: flex-start; }
+
+  .hud-left { display: flex; flex-direction: column; gap: 8px; }
+  .hud-title { color: #fff; font-size: 14px; letter-spacing: 2px; opacity: 0.6; }
+  .hud-player { color: #fff; font-size: 22px; font-weight: 600; }
+
+  .hud-right { display: flex; gap: 20px; align-items: center; }
+  .stat-box {
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px; padding: 10px 16px; text-align: center; min-width: 80px;
+  }
+  .stat-value { color: #00c8ff; font-size: 24px; font-weight: 700; }
+  .stat-label { color: rgba(255,255,255,0.4); font-size: 10px; letter-spacing: 1px; margin-top: 2px; }
+
+  /* --- Quest Panel --- */
+  #quest-panel {
+    position: fixed; left: 30px; top: 50%; transform: translateY(-50%); z-index: 100;
+    background: rgba(10,10,40,0.9); border: 1px solid rgba(0,200,255,0.2);
+    border-radius: 12px; padding: 24px; width: 320px;
+    backdrop-filter: blur(20px); display: none;
+  }
+  #quest-panel.visible { display: block; animation: slideIn 0.5s ease; }
+  @keyframes slideIn { from { transform: translateY(-50%) translateX(-40px); opacity:0; } to { transform: translateY(-50%) translateX(0); opacity:1; } }
+
+  .quest-type { color: #a855f7; font-size: 11px; letter-spacing: 2px; margin-bottom: 6px; }
+  .quest-title { color: #fff; font-size: 20px; font-weight: 700; margin-bottom: 12px; }
+  .quest-desc { color: rgba(255,255,255,0.6); font-size: 14px; line-height: 1.6; margin-bottom: 20px; }
+  .quest-reward {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(168,85,247,0.1); border: 1px solid rgba(168,85,247,0.2);
+    border-radius: 8px; padding: 10px 14px; margin-bottom: 16px;
+  }
+  .quest-reward span { color: #a855f7; font-size: 13px; }
+
+  .quest-blocked {
+    background: rgba(255,80,80,0.1); border: 1px solid rgba(255,80,80,0.3);
+    border-radius: 8px; padding: 14px; text-align: center; margin-bottom: 14px;
+  }
+  .quest-blocked .icon { font-size: 28px; margin-bottom: 6px; }
+  .quest-blocked .text { color: #ff6b6b; font-size: 13px; font-weight: 600; }
+  .quest-blocked .subtext { color: rgba(255,255,255,0.4); font-size: 11px; margin-top: 4px; }
+
+  #photo-upload-btn {
+    width: 100%; padding: 14px; font-size: 14px; font-weight: 600; letter-spacing: 1px;
+    background: linear-gradient(135deg, #00c8ff, #a855f7); border: none; color: #fff;
+    border-radius: 8px; cursor: pointer; transition: all 0.3s;
+  }
+  #photo-upload-btn:hover { transform: scale(1.02); box-shadow: 0 0 30px rgba(0,200,255,0.4); }
+
+  #photo-preview {
+    width: 100%; border-radius: 8px; margin-bottom: 12px; display: none;
+    border: 2px solid rgba(0,200,255,0.3);
+  }
+
+  /* --- Verification Overlay --- */
+  #verify-overlay {
+    position: fixed; inset: 0; z-index: 500;
+    background: rgba(0,0,0,0.85); backdrop-filter: blur(10px);
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+  }
+  #verify-overlay.visible { display: flex; }
+  .verify-spinner { width: 60px; height: 60px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #00c8ff; border-radius: 50%; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .verify-text { color: #fff; font-size: 18px; margin-top: 20px; letter-spacing: 2px; }
+  .verify-sub { color: rgba(255,255,255,0.4); font-size: 13px; margin-top: 8px; }
+
+  /* --- Success Overlay --- */
+  #success-overlay {
+    position: fixed; inset: 0; z-index: 500;
+    background: rgba(0,0,0,0.85); backdrop-filter: blur(10px);
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+  }
+  #success-overlay.visible { display: flex; animation: fadeIn 0.5s; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .success-icon { font-size: 80px; margin-bottom: 20px; }
+  .success-title { color: #4ade80; font-size: 28px; font-weight: 700; letter-spacing: 2px; }
+  .success-xp { color: #a855f7; font-size: 20px; margin-top: 10px; }
+  .success-msg { color: rgba(255,255,255,0.5); font-size: 14px; margin-top: 16px; max-width: 400px; text-align: center; line-height: 1.6; }
+
+  /* --- Social Quest Panel --- */
+  #social-panel {
+    position: fixed; right: 30px; top: 50%; transform: translateY(-50%); z-index: 100;
+    background: rgba(10,10,40,0.9); border: 1px solid rgba(168,85,247,0.2);
+    border-radius: 12px; padding: 24px; width: 300px;
+    backdrop-filter: blur(20px); display: none;
+  }
+  #social-panel.visible { display: block; animation: slideInRight 0.5s ease; }
+  @keyframes slideInRight { from { transform: translateY(-50%) translateX(40px); opacity:0; } to { transform: translateY(-50%) translateX(0); opacity:1; } }
+
+  .friend-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px; border-radius: 8px; margin-bottom: 8px;
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05);
+  }
+  .friend-avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: linear-gradient(135deg, #a855f7, #00c8ff);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 16px;
+  }
+  .friend-info { flex: 1; }
+  .friend-name { color: #fff; font-size: 14px; font-weight: 600; }
+  .friend-status { font-size: 11px; margin-top: 2px; }
+  .friend-status.online { color: #4ade80; }
+  .friend-status.offline { color: rgba(255,255,255,0.3); }
+
+  .social-quest-box {
+    background: rgba(168,85,247,0.1); border: 1px solid rgba(168,85,247,0.2);
+    border-radius: 8px; padding: 14px; margin-top: 16px;
+  }
+  .social-quest-box .title { color: #a855f7; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .social-quest-box .desc { color: rgba(255,255,255,0.5); font-size: 12px; line-height: 1.5; }
+  .call-btn {
+    width: 100%; margin-top: 12px; padding: 10px; border: 1px solid rgba(168,85,247,0.4);
+    background: transparent; color: #a855f7; border-radius: 6px; cursor: pointer;
+    font-size: 13px; font-weight: 600; transition: all 0.3s;
+  }
+  .call-btn:hover { background: rgba(168,85,247,0.15); }
+
+  /* --- Minimap --- */
+  #minimap {
+    position: fixed; bottom: 30px; right: 30px; z-index: 100;
+    width: 160px; height: 160px; border-radius: 50%;
+    background: rgba(10,10,40,0.8); border: 2px solid rgba(0,200,255,0.3);
+    display: none; overflow: hidden;
+  }
+  #minimap.visible { display: block; }
+  #minimap canvas { width: 100%; height: 100%; }
+
+  /* --- Controls hint --- */
+  #controls-hint {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 100;
+    display: none; gap: 12px;
+  }
+  #controls-hint.visible { display: flex; }
+  .key-hint {
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px; padding: 6px 14px; color: rgba(255,255,255,0.4); font-size: 12px;
+  }
+  .key-hint kbd { color: #00c8ff; font-weight: 600; font-family: inherit; }
+
+  /* --- Canvas --- */
+  #game-canvas { position: fixed; inset: 0; z-index: 1; }
+
+  /* --- Crosshair --- */
+  #crosshair {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 50;
+    width: 20px; height: 20px; display: none;
+  }
+  #crosshair.visible { display: block; }
+  #crosshair::before, #crosshair::after {
+    content: ''; position: absolute; background: rgba(255,255,255,0.4);
+  }
+  #crosshair::before { width: 2px; height: 100%; left: 50%; transform: translateX(-50%); }
+  #crosshair::after { height: 2px; width: 100%; top: 50%; transform: translateY(-50%); }
+
+  /* Notification toast */
+  #toast {
+    position: fixed; top: 80px; left: 50%; transform: translateX(-50%); z-index: 200;
+    background: rgba(10,10,40,0.95); border: 1px solid rgba(0,200,255,0.3);
+    border-radius: 8px; padding: 14px 24px; color: #fff; font-size: 14px;
+    display: none; backdrop-filter: blur(10px);
+  }
+  #toast.visible { display: block; animation: toastIn 0.4s ease; }
+  @keyframes toastIn { from { opacity:0; transform: translateX(-50%) translateY(-20px); } to { opacity:1; transform: translateX(-50%) translateY(0); } }
+</style>
+</head>
+<body>
+
+<!-- Loading Screen -->
+<div id="loading-screen">
+  <h1>REALQUEST</h1>
+  <p>REALITY IS THE GAME</p>
+  <div class="loader"><div class="loader-bar" id="loader-bar"></div></div>
+  <button id="start-btn" onclick="startGame()">ENTER WORLD</button>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="hud-left">
+    <div class="hud-title">REALQUEST</div>
+    <div class="hud-player">Player_One</div>
+  </div>
+  <div class="hud-right">
+    <div class="stat-box">
+      <div class="stat-value" id="level">1</div>
+      <div class="stat-label">LEVEL</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value" id="xp">0</div>
+      <div class="stat-label">XP</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value" id="quests-done">0</div>
+      <div class="stat-label">QUESTS</div>
+    </div>
+  </div>
+</div>
+
+<!-- Quest Panel -->
+<div id="quest-panel">
+  <div class="quest-type">REAL WORLD QUEST</div>
+  <div class="quest-title" id="q-title">Drink Water</div>
+  <div class="quest-desc" id="q-desc">Your character is dehydrated. To continue exploring, drink a real glass of water and take a photo as proof.</div>
+  <div class="quest-reward">
+    <span id="q-reward">+50 XP / Hydration Buff (+20% stamina for 30 min)</span>
+  </div>
+  <div class="quest-blocked">
+    <div class="icon">🔒</div>
+    <div class="text">PROGRESS BLOCKED</div>
+    <div class="subtext">Complete real-world action to continue</div>
+  </div>
+  <img id="photo-preview" />
+  <input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none" />
+  <button id="photo-upload-btn" onclick="document.getElementById('photo-input').click()">
+    UPLOAD PHOTO PROOF
+  </button>
+</div>
+
+<!-- Social Panel -->
+<div id="social-panel">
+  <div class="quest-type">SOCIAL CONNECTION</div>
+  <div style="margin-top: 12px;">
+    <div class="friend-item">
+      <div class="friend-avatar">A</div>
+      <div class="friend-info">
+        <div class="friend-name">Alex_Real</div>
+        <div class="friend-status online">online — in Forest Biome</div>
+      </div>
+    </div>
+    <div class="friend-item">
+      <div class="friend-avatar">M</div>
+      <div class="friend-info">
+        <div class="friend-name">Maria_Quest</div>
+        <div class="friend-status offline">offline — last seen 2h ago</div>
+      </div>
+    </div>
+    <div class="friend-item">
+      <div class="friend-avatar">D</div>
+      <div class="friend-info">
+        <div class="friend-name">Denis_Pro</div>
+        <div class="friend-status online">online — in Mountain Peak</div>
+      </div>
+    </div>
+  </div>
+  <div class="social-quest-box">
+    <div class="title">SOCIAL QUEST: Team Up</div>
+    <div class="desc">Call or meet Alex_Real in real life to unlock the Ancient Temple dungeon. Both players must confirm.</div>
+    <button class="call-btn" onclick="simulateCall()">CALL ALEX_REAL</button>
+  </div>
+</div>
+
+<!-- Minimap -->
+<div id="minimap"><canvas id="minimap-canvas" width="160" height="160"></canvas></div>
+
+<!-- Crosshair -->
+<div id="crosshair"></div>
+
+<!-- Controls hint -->
+<div id="controls-hint">
+  <div class="key-hint"><kbd>WASD</kbd> Move</div>
+  <div class="key-hint"><kbd>MOUSE</kbd> Look</div>
+  <div class="key-hint"><kbd>Q</kbd> Quest</div>
+  <div class="key-hint"><kbd>F</kbd> Friends</div>
+  <div class="key-hint"><kbd>ESC</kbd> Menu</div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- Verify Overlay -->
+<div id="verify-overlay">
+  <div class="verify-spinner"></div>
+  <div class="verify-text">ANALYZING PHOTO...</div>
+  <div class="verify-sub">AI is verifying your real-world action</div>
+</div>
+
+<!-- Success Overlay -->
+<div id="success-overlay">
+  <div class="success-icon">✅</div>
+  <div class="success-title">QUEST COMPLETE</div>
+  <div class="success-xp" id="success-xp">+50 XP</div>
+  <div class="success-msg" id="success-msg">Hydration confirmed! Your character's stamina has been boosted. The path forward is now unlocked.</div>
+</div>
+
+<canvas id="game-canvas"></canvas>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ==================== GAME STATE ====================
+const state = {
+  xp: 0, level: 1, questsDone: 0,
+  questActive: true, questPanelOpen: false, socialPanelOpen: false,
+  moveForward: false, moveBackward: false, moveLeft: false, moveRight: false,
+  mouseX: 0, mouseY: 0, yaw: 0, pitch: 0, locked: false,
+  currentQuest: 0
+};
+
+const quests = [
+  { type: 'REAL WORLD QUEST', title: 'Drink Water', desc: 'Your character is dehydrated and losing stamina. Drink a real glass of water and photograph it to restore energy.', reward: '+50 XP / Hydration Buff (+20% stamina)', xp: 50, successMsg: 'Hydration confirmed! Stamina boosted. The forest path is now unlocked.' },
+  { type: 'REAL WORLD QUEST', title: 'Touch Grass', desc: 'The Earth Spirit requires proof of your connection to nature. Go outside and take a photo of grass or a tree.', reward: '+75 XP / Nature Shield (damage -15%)', xp: 75, successMsg: 'Nature bond confirmed! The Earth Spirit grants you protection.' },
+  { type: 'REAL WORLD QUEST', title: 'Sunrise Watch', desc: 'The Sun Temple gate only opens for those who witness real sunlight. Take a photo of the sky.', reward: '+100 XP / Sun Blessing (unlock Sun Temple)', xp: 100, successMsg: 'Sunlight verified! The Sun Temple gates open before you.' },
+];
+
+// ==================== LOADING ====================
+let loadProgress = 0;
+const loadInterval = setInterval(() => {
+  loadProgress += Math.random() * 15;
+  if (loadProgress >= 100) {
+    loadProgress = 100;
+    clearInterval(loadInterval);
+    document.getElementById('start-btn').style.display = 'block';
+  }
+  document.getElementById('loader-bar').style.width = loadProgress + '%';
+}, 200);
+
+// ==================== THREE.JS SCENE ====================
+let scene, camera, renderer, clock;
+const objects = [];
+let trees = [], rocks = [], crystals = [], buildings = [];
+let waterMesh, skyDome;
+
+function initScene() {
+  scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x0a0a2e, 0.008);
+
+  camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera.position.set(0, 2, 0);
+
+  renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('game-canvas'), antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.8;
+
+  clock = new THREE.Clock();
+
+  // Sky
+  const skyGeo = new THREE.SphereGeometry(400, 32, 32);
+  const skyMat = new THREE.ShaderMaterial({
+    uniforms: { topColor: { value: new THREE.Color(0x0a0a3e) }, bottomColor: { value: new THREE.Color(0x1a0a2e) }, offset: { value: 20 }, exponent: { value: 0.4 } },
+    vertexShader: `varying vec3 vWorldPos; void main() { vec4 wp = modelMatrix * vec4(position,1.0); vWorldPos = wp.xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+    fragmentShader: `uniform vec3 topColor; uniform vec3 bottomColor; uniform float offset; uniform float exponent; varying vec3 vWorldPos; void main() { float h = normalize(vWorldPos + offset).y; gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h,0.0), exponent), 0.0)), 1.0); }`,
+    side: THREE.BackSide
+  });
+  skyDome = new THREE.Mesh(skyGeo, skyMat);
+  scene.add(skyDome);
+
+  // Ambient light
+  scene.add(new THREE.AmbientLight(0x334466, 0.6));
+
+  // Moon light
+  const moonLight = new THREE.DirectionalLight(0x6688cc, 0.8);
+  moonLight.position.set(50, 80, -30);
+  moonLight.castShadow = true;
+  scene.add(moonLight);
+
+  // Point lights (glowing areas)
+  const colors = [0x00c8ff, 0xa855f7, 0x4ade80, 0xff6b6b];
+  for (let i = 0; i < 8; i++) {
+    const pl = new THREE.PointLight(colors[i % 4], 2, 30);
+    const angle = (i / 8) * Math.PI * 2;
+    pl.position.set(Math.cos(angle) * 25, 1, Math.sin(angle) * 25);
+    scene.add(pl);
+  }
+
+  // Ground
+  const groundGeo = new THREE.PlaneGeometry(500, 500, 100, 100);
+  const positions = groundGeo.attributes.position.array;
+  for (let i = 0; i < positions.length; i += 3) {
+    positions[i + 2] += Math.sin(positions[i] * 0.05) * Math.cos(positions[i+1] * 0.05) * 2;
+  }
+  groundGeo.computeVertexNormals();
+  const groundMat = new THREE.MeshStandardMaterial({ color: 0x1a2a1a, roughness: 0.9 });
+  const ground = new THREE.Mesh(groundGeo, groundMat);
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  // Water plane
+  const waterGeo = new THREE.PlaneGeometry(100, 100, 50, 50);
+  const waterMat = new THREE.MeshStandardMaterial({ color: 0x003366, transparent: true, opacity: 0.6, roughness: 0.1, metalness: 0.8 });
+  waterMesh = new THREE.Mesh(waterGeo, waterMat);
+  waterMesh.rotation.x = -Math.PI / 2;
+  waterMesh.position.set(40, -0.3, -30);
+  scene.add(waterMesh);
+
+  // Generate trees
+  for (let i = 0; i < 60; i++) {
+    const x = (Math.random() - 0.5) * 200;
+    const z = (Math.random() - 0.5) * 200;
+    if (Math.abs(x) < 5 && Math.abs(z) < 5) continue;
+    createTree(x, 0, z);
+  }
+
+  // Glowing crystals
+  for (let i = 0; i < 20; i++) {
+    const x = (Math.random() - 0.5) * 120;
+    const z = (Math.random() - 0.5) * 120;
+    createCrystal(x, 0, z);
+  }
+
+  // Quest marker (glowing pillar)
+  createQuestMarker(8, 0, -8);
+
+  // Blocked path (gate)
+  createBlockedGate(0, 0, -20);
+
+  // Structures
+  createTemple(50, 0, -50);
+  createTower(-30, 0, 40);
+
+  // Stars
+  const starsGeo = new THREE.BufferGeometry();
+  const starPositions = [];
+  for (let i = 0; i < 2000; i++) {
+    const r = 300;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.random() * Math.PI * 0.5;
+    starPositions.push(r * Math.sin(phi) * Math.cos(theta), r * Math.cos(phi), r * Math.sin(phi) * Math.sin(theta));
+  }
+  starsGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+  const starsMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.5, transparent: true, opacity: 0.7 });
+  scene.add(new THREE.Points(starsGeo, starsMat));
+
+  // Floating particles
+  const particleGeo = new THREE.BufferGeometry();
+  const particlePositions = [];
+  for (let i = 0; i < 500; i++) {
+    particlePositions.push((Math.random()-0.5)*150, Math.random()*20, (Math.random()-0.5)*150);
+  }
+  particleGeo.setAttribute('position', new THREE.Float32BufferAttribute(particlePositions, 3));
+  const particleMat = new THREE.PointsMaterial({ color: 0x00c8ff, size: 0.15, transparent: true, opacity: 0.5 });
+  const particles = new THREE.Points(particleGeo, particleMat);
+  particles.userData.isParticles = true;
+  scene.add(particles);
+  objects.push(particles);
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+}
+
+function createTree(x, y, z) {
+  const group = new THREE.Group();
+  // Trunk
+  const trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.15, 0.25, Math.random() * 2 + 3, 6),
+    new THREE.MeshStandardMaterial({ color: 0x3a2a1a })
+  );
+  trunk.position.y = 1.5;
+  trunk.castShadow = true;
+  group.add(trunk);
+  // Foliage
+  const foliageColor = [0x1a4a2a, 0x2a5a3a, 0x0a3a1a][Math.floor(Math.random()*3)];
+  const foliage = new THREE.Mesh(
+    new THREE.SphereGeometry(Math.random() * 1.5 + 1.5, 8, 6),
+    new THREE.MeshStandardMaterial({ color: foliageColor })
+  );
+  foliage.position.y = 3.5 + Math.random();
+  foliage.castShadow = true;
+  group.add(foliage);
+  group.position.set(x, y, z);
+  scene.add(group);
+  trees.push(group);
+}
+
+function createCrystal(x, y, z) {
+  const colors = [0x00c8ff, 0xa855f7, 0x4ade80];
+  const color = colors[Math.floor(Math.random() * 3)];
+  const crystal = new THREE.Mesh(
+    new THREE.OctahedronGeometry(Math.random() * 0.4 + 0.3, 0),
+    new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.8, transparent: true, opacity: 0.8 })
+  );
+  crystal.position.set(x, y + 0.8, z);
+  crystal.rotation.y = Math.random() * Math.PI;
+  crystal.userData.floatOffset = Math.random() * Math.PI * 2;
+  scene.add(crystal);
+  crystals.push(crystal);
+}
+
+function createQuestMarker(x, y, z) {
+  const group = new THREE.Group();
+  // Pillar of light
+  const pillar = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.1, 0.3, 8, 8),
+    new THREE.MeshStandardMaterial({ color: 0x00c8ff, emissive: 0x00c8ff, emissiveIntensity: 1, transparent: true, opacity: 0.4 })
+  );
+  pillar.position.y = 4;
+  group.add(pillar);
+  // Base rune circle
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(1, 1.5, 32),
+    new THREE.MeshStandardMaterial({ color: 0x00c8ff, emissive: 0x00c8ff, emissiveIntensity: 0.5, side: THREE.DoubleSide })
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.05;
+  group.add(ring);
+  // Floating symbol
+  const diamond = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.4, 0),
+    new THREE.MeshStandardMaterial({ color: 0x00c8ff, emissive: 0x00c8ff, emissiveIntensity: 1 })
+  );
+  diamond.position.y = 3;
+  diamond.userData.isQuestSymbol = true;
+  group.add(diamond);
+  objects.push(diamond);
+
+  group.position.set(x, y, z);
+  scene.add(group);
+}
+
+function createBlockedGate(x, y, z) {
+  const group = new THREE.Group();
+  // Pillars
+  for (let side of [-1, 1]) {
+    const pillar = new THREE.Mesh(
+      new THREE.BoxGeometry(0.8, 5, 0.8),
+      new THREE.MeshStandardMaterial({ color: 0x2a2a4a })
+    );
+    pillar.position.set(side * 2.5, 2.5, 0);
+    pillar.castShadow = true;
+    group.add(pillar);
+  }
+  // Barrier (red energy)
+  const barrier = new THREE.Mesh(
+    new THREE.PlaneGeometry(5, 5),
+    new THREE.MeshStandardMaterial({ color: 0xff3333, emissive: 0xff3333, emissiveIntensity: 0.5, transparent: true, opacity: 0.3, side: THREE.DoubleSide })
+  );
+  barrier.position.y = 2.5;
+  barrier.userData.isBarrier = true;
+  group.add(barrier);
+  objects.push(barrier);
+  // Lock symbol
+  const lock = new THREE.Mesh(
+    new THREE.TorusGeometry(0.4, 0.1, 8, 16),
+    new THREE.MeshStandardMaterial({ color: 0xff6666, emissive: 0xff6666, emissiveIntensity: 0.8 })
+  );
+  lock.position.y = 3.5;
+  group.add(lock);
+
+  group.position.set(x, y, z);
+  scene.add(group);
+}
+
+function createTemple(x, y, z) {
+  const group = new THREE.Group();
+  // Base
+  const base = new THREE.Mesh(
+    new THREE.BoxGeometry(12, 1, 12),
+    new THREE.MeshStandardMaterial({ color: 0x3a3a5a })
+  );
+  base.position.y = 0.5;
+  group.add(base);
+  // Columns
+  for (let i = 0; i < 4; i++) {
+    for (let j = 0; j < 4; j++) {
+      if (i > 0 && i < 3 && j > 0 && j < 3) continue;
+      const col = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.3, 0.3, 6, 8),
+        new THREE.MeshStandardMaterial({ color: 0x4a4a6a })
+      );
+      col.position.set(-4.5 + i * 3, 4, -4.5 + j * 3);
+      col.castShadow = true;
+      group.add(col);
+    }
+  }
+  // Roof
+  const roof = new THREE.Mesh(
+    new THREE.ConeGeometry(8, 3, 4),
+    new THREE.MeshStandardMaterial({ color: 0x2a2a4a })
+  );
+  roof.position.y = 8.5;
+  roof.rotation.y = Math.PI / 4;
+  group.add(roof);
+  // Glow
+  const glow = new THREE.PointLight(0xa855f7, 3, 25);
+  glow.position.y = 3;
+  group.add(glow);
+
+  group.position.set(x, y, z);
+  scene.add(group);
+}
+
+function createTower(x, y, z) {
+  const group = new THREE.Group();
+  const tower = new THREE.Mesh(
+    new THREE.CylinderGeometry(2, 2.5, 12, 8),
+    new THREE.MeshStandardMaterial({ color: 0x2a2a4a })
+  );
+  tower.position.y = 6;
+  tower.castShadow = true;
+  group.add(tower);
+  const top = new THREE.Mesh(
+    new THREE.ConeGeometry(3, 4, 8),
+    new THREE.MeshStandardMaterial({ color: 0x1a1a3a })
+  );
+  top.position.y = 14;
+  group.add(top);
+  // Beacon
+  const beacon = new THREE.PointLight(0x00c8ff, 5, 50);
+  beacon.position.y = 15;
+  group.add(beacon);
+
+  group.position.set(x, y, z);
+  scene.add(group);
+}
+
+// ==================== GAME LOOP ====================
+function animate() {
+  requestAnimationFrame(animate);
+  const delta = clock.getDelta();
+  const time = clock.getElapsedTime();
+
+  // Player movement
+  if (state.locked) {
+    const speed = 8 * delta;
+    const dir = new THREE.Vector3();
+    const front = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    front.y = 0; front.normalize();
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+    right.y = 0; right.normalize();
+    if (state.moveForward) dir.add(front);
+    if (state.moveBackward) dir.sub(front);
+    if (state.moveRight) dir.add(right);
+    if (state.moveLeft) dir.sub(right);
+    dir.normalize().multiplyScalar(speed);
+    camera.position.add(dir);
+    camera.position.y = 2 + Math.sin(time * 3) * 0.05; // Subtle bobbing
+  }
+
+  // Animate crystals
+  crystals.forEach(c => {
+    c.position.y = 0.8 + Math.sin(time * 2 + c.userData.floatOffset) * 0.3;
+    c.rotation.y += delta * 0.5;
+  });
+
+  // Animate objects
+  objects.forEach(obj => {
+    if (obj.userData.isQuestSymbol) {
+      obj.position.y = 3 + Math.sin(time * 1.5) * 0.5;
+      obj.rotation.y += delta;
+      obj.rotation.x += delta * 0.5;
+    }
+    if (obj.userData.isBarrier) {
+      obj.material.opacity = 0.2 + Math.sin(time * 3) * 0.1;
+    }
+    if (obj.userData.isParticles) {
+      const pos = obj.geometry.attributes.position.array;
+      for (let i = 1; i < pos.length; i += 3) {
+        pos[i] += delta * 0.3;
+        if (pos[i] > 20) pos[i] = 0;
+      }
+      obj.geometry.attributes.position.needsUpdate = true;
+    }
+  });
+
+  // Water animation
+  if (waterMesh) {
+    const wPos = waterMesh.geometry.attributes.position.array;
+    for (let i = 0; i < wPos.length; i += 3) {
+      wPos[i + 2] = Math.sin(wPos[i] * 0.3 + time) * 0.15 + Math.cos(wPos[i+1] * 0.3 + time * 0.7) * 0.1;
+    }
+    waterMesh.geometry.attributes.position.needsUpdate = true;
+  }
+
+  // Minimap
+  drawMinimap();
+
+  renderer.render(scene, camera);
+}
+
+// ==================== MINIMAP ====================
+function drawMinimap() {
+  const canvas = document.getElementById('minimap-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'rgba(10,10,40,0.9)';
+  ctx.fillRect(0, 0, 160, 160);
+
+  const scale = 0.7;
+  const cx = 80, cy = 80;
+
+  // Trees as dots
+  ctx.fillStyle = '#1a4a2a';
+  trees.forEach(t => {
+    const dx = (t.position.x - camera.position.x) * scale + cx;
+    const dy = (t.position.z - camera.position.z) * scale + cy;
+    if (dx > 0 && dx < 160 && dy > 0 && dy < 160) {
+      ctx.beginPath(); ctx.arc(dx, dy, 2, 0, Math.PI*2); ctx.fill();
+    }
+  });
+
+  // Crystals
+  ctx.fillStyle = '#00c8ff';
+  crystals.forEach(c => {
+    const dx = (c.position.x - camera.position.x) * scale + cx;
+    const dy = (c.position.z - camera.position.z) * scale + cy;
+    if (dx > 0 && dx < 160 && dy > 0 && dy < 160) {
+      ctx.beginPath(); ctx.arc(dx, dy, 2, 0, Math.PI*2); ctx.fill();
+    }
+  });
+
+  // Quest marker
+  ctx.fillStyle = '#ffcc00';
+  const qx = (8 - camera.position.x) * scale + cx;
+  const qy = (-8 - camera.position.z) * scale + cy;
+  if (qx > 0 && qx < 160 && qy > 0 && qy < 160) {
+    ctx.beginPath(); ctx.arc(qx, qy, 4, 0, Math.PI*2); ctx.fill();
+  }
+
+  // Player
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI*2); ctx.fill();
+  // Direction
+  ctx.strokeStyle = '#00c8ff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(cx - Math.sin(state.yaw) * 10, cy - Math.cos(state.yaw) * 10);
+  ctx.stroke();
+}
+
+// ==================== CONTROLS ====================
+document.addEventListener('keydown', e => {
+  switch(e.code) {
+    case 'KeyW': state.moveForward = true; break;
+    case 'KeyS': state.moveBackward = true; break;
+    case 'KeyA': state.moveLeft = true; break;
+    case 'KeyD': state.moveRight = true; break;
+    case 'KeyQ': toggleQuestPanel(); break;
+    case 'KeyF': toggleSocialPanel(); break;
+  }
+});
+
+document.addEventListener('keyup', e => {
+  switch(e.code) {
+    case 'KeyW': state.moveForward = false; break;
+    case 'KeyS': state.moveBackward = false; break;
+    case 'KeyA': state.moveLeft = false; break;
+    case 'KeyD': state.moveRight = false; break;
+  }
+});
+
+document.addEventListener('mousemove', e => {
+  if (!state.locked) return;
+  state.yaw -= e.movementX * 0.002;
+  state.pitch -= e.movementY * 0.002;
+  state.pitch = Math.max(-Math.PI/2.5, Math.min(Math.PI/2.5, state.pitch));
+  camera.rotation.order = 'YXZ';
+  camera.rotation.y = state.yaw;
+  camera.rotation.x = state.pitch;
+});
+
+document.addEventListener('click', () => {
+  if (!state.locked && document.getElementById('loading-screen').classList.contains('hidden')) {
+    document.body.requestPointerLock();
+  }
+});
+
+document.addEventListener('pointerlockchange', () => {
+  state.locked = !!document.pointerLockElement;
+});
+
+// ==================== UI FUNCTIONS ====================
+function toggleQuestPanel() {
+  state.questPanelOpen = !state.questPanelOpen;
+  document.getElementById('quest-panel').classList.toggle('visible', state.questPanelOpen);
+  if (state.questPanelOpen && state.socialPanelOpen) {
+    state.socialPanelOpen = false;
+    document.getElementById('social-panel').classList.remove('visible');
+  }
+}
+
+function toggleSocialPanel() {
+  state.socialPanelOpen = !state.socialPanelOpen;
+  document.getElementById('social-panel').classList.toggle('visible', state.socialPanelOpen);
+  if (state.socialPanelOpen && state.questPanelOpen) {
+    state.questPanelOpen = false;
+    document.getElementById('quest-panel').classList.remove('visible');
+  }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('visible');
+  setTimeout(() => t.classList.remove('visible'), 3000);
+}
+
+function updateQuest() {
+  const q = quests[state.currentQuest];
+  document.getElementById('q-title').textContent = q.title;
+  document.getElementById('q-desc').textContent = q.desc;
+  document.getElementById('q-reward').textContent = q.reward;
+  document.getElementById('photo-preview').style.display = 'none';
+}
+
+// ==================== PHOTO VERIFICATION ====================
+document.getElementById('photo-input').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    const preview = document.getElementById('photo-preview');
+    preview.src = ev.target.result;
+    preview.style.display = 'block';
+
+    // Start verification
+    setTimeout(() => {
+      document.getElementById('verify-overlay').classList.add('visible');
+
+      // Simulate AI verification
+      setTimeout(() => {
+        document.getElementById('verify-overlay').classList.remove('visible');
+
+        // Success!
+        const q = quests[state.currentQuest];
+        document.getElementById('success-xp').textContent = '+' + q.xp + ' XP';
+        document.getElementById('success-msg').textContent = q.successMsg;
+        document.getElementById('success-overlay').classList.add('visible');
+
+        state.xp += q.xp;
+        state.questsDone++;
+        document.getElementById('xp').textContent = state.xp;
+        document.getElementById('quests-done').textContent = state.questsDone;
+
+        if (state.xp >= state.level * 100) {
+          state.level++;
+          document.getElementById('level').textContent = state.level;
+        }
+
+        setTimeout(() => {
+          document.getElementById('success-overlay').classList.remove('visible');
+          state.currentQuest = (state.currentQuest + 1) % quests.length;
+          updateQuest();
+          showToast('New quest available! Press Q to view.');
+        }, 3000);
+      }, 2500);
+    }, 500);
+  };
+  reader.readAsDataURL(file);
+});
+
+function simulateCall() {
+  showToast('Calling Alex_Real... (demo: call simulation)');
+  setTimeout(() => {
+    showToast('Alex_Real confirmed! Ancient Temple dungeon unlocked! +150 XP');
+    state.xp += 150;
+    state.questsDone++;
+    document.getElementById('xp').textContent = state.xp;
+    document.getElementById('quests-done').textContent = state.questsDone;
+  }, 3000);
+}
+
+// ==================== START GAME ====================
+function startGame() {
+  initScene();
+
+  document.getElementById('loading-screen').classList.add('hidden');
+  document.getElementById('hud').classList.add('visible');
+  document.getElementById('minimap').classList.add('visible');
+  document.getElementById('crosshair').classList.add('visible');
+  document.getElementById('controls-hint').classList.add('visible');
+
+  setTimeout(() => {
+    showToast('Welcome to RealQuest. Your reality shapes this world.');
+    setTimeout(() => {
+      showToast('Press Q to view your first quest.');
+      document.getElementById('quest-panel').classList.add('visible');
+      state.questPanelOpen = true;
+    }, 4000);
+  }, 1000);
+
+  document.body.requestPointerLock();
+  animate();
+}
+</script>
+</body>
+</html>
